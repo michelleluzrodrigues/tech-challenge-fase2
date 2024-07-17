@@ -20,4 +20,4 @@ Antes de executar o script, certifique-se de ter o seguinte instalado:
 Você pode instalar as bibliotecas necessárias executando:
 
 ```bash
-pip install selenium pandas
+pip install -r requirements.txt
