@@ -2,7 +2,17 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select
 import pandas as pd
+import boto3
+
+from datetime import datetime
 import time
+import io
+import os
+
+# Obtendo as credenciais da aws salvas nas variaveis de ambiente
+aws_access_key_id = os.getenv('aws_access_key_id') 
+aws_secret_access_key = os.getenv('aws_secret_access_key')
+aws_session_token = os.getenv("aws_session_token")
 
 # Iniciar o WebDriver diretamente, sem especificar o caminho completo
 driver = webdriver.Chrome()
@@ -19,12 +29,34 @@ try:
     # Esperar a página carregar os dados
     time.sleep(2)
 
+    # Fazer upload do arquivo no s3
+    def save_df_to_s3_parquet(df, bucket, key):
+
+        try:
+            # Convertendo o DataFrame para formato Parquet em memória
+            buffer = io.BytesIO()
+            df.to_parquet(buffer, index=False)
+            buffer.seek(0)
+
+            # Conectando ao S3 e enviando o arquivo Parquet
+            s3_client = boto3.client('s3', 
+                            aws_access_key_id=aws_access_key_id,
+                            aws_secret_access_key=aws_secret_access_key,
+                            aws_session_token=aws_session_token)
+
+            s3_client.upload_fileobj(buffer, bucket, key)
+
+            print(f'DataFrame salvo como Parquet em s3://{bucket}/{key}')
+        except Exception as e:
+            print(f'Erro ao salvar DataFrame como Parquet no S3: {str(e)}')
+            raise e
+
+
     # Função para extrair dados de uma página
     def extract_data():
         try:
             table = driver.find_element(By.XPATH, '//table[@class="table table-responsive-sm table-responsive-md"]')
-            tbody = table.find_element(By.TAG_NAME, 'tbody')
-            rows = tbody.find_elements(By.TAG_NAME, 'tr')
+            rows = table.find_elements(By.TAG_NAME, 'tr')
             page_data = []
             for row in rows:
                 cols = row.find_elements(By.TAG_NAME, 'td')
@@ -107,8 +139,17 @@ try:
         
         df = pd.concat([df, df_footer], ignore_index=True)
 
+        # Adicionar coluna com a data de extração
+        today = datetime.today().strftime("%Y-%m-%d")
+        df['dt_extract'] = pd.Series([str(today) for _ in range(len(df.index))]) 
+
         # Salvar os dados em um arquivo CSV (opcional)
         df.to_csv('carteira_do_dia_completa.csv', index=False)
+        
+        # Enviar os dados em parquet para o s3
+        bucket_name = "bovespa-raw-bucket-mlops"
+        file_name = f"carteira-do-dia-{today}"
+        save_df_to_s3_parquet(df, bucket_name, file_name)
 
         print("Dados extraídos e salvos com sucesso:")
         print(df)
