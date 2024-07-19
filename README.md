@@ -13,6 +13,8 @@ Antes de executar o script, certifique-se de ter o seguinte instalado:
    - `selenium`
    - `pandas`
 
+Além disso, é necessário ter as credenciais da AWS nas variáveis de ambiente.
+
 ## Instalação
 
 ### 1. Instalar as Bibliotecas Necessárias
